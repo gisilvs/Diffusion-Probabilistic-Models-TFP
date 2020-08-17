@@ -12,10 +12,13 @@ class MLP_conv_dense(Model):
                  spatial_width=28, n_scales=None, n_temporal_basis=10):
         super(MLP_conv_dense, self).__init__()
         self.mlp = MLP(spatial_width, n_hidden_dense_lower_output, n_layers_dense_lower, n_hidden_dense_lower)
+        self.conv1 = MultiConv(n_hidden_conv,n_layers_conv)
         self.conv2 = ConvSeq1x1(n_hidden_dense_upper, n_layers_dense_upper, n_temporal_basis)
 
     def call(self, x):
-        x = self.mlp(x)
+        x_mlp = self.mlp(x)
+        x_conv = self.conv1(x)
+        x = tf.concat([x_mlp,x_conv],-1)
         x = self.conv2(x)
         return x
 
@@ -42,6 +45,17 @@ class ConvSeq1x1(Model):
         super(ConvSeq1x1, self).__init__()
         self.conv = [Conv2D(channels, 1, activation=LeakyReLU()) for i in range(n_layers - 1)]
         self.conv.append(Conv2D(n_temporal_basis * 2, 1, activation=LeakyReLU()))
+
+    def call(self, x):
+        for c in self.conv:
+            x = c(x)
+        return x
+
+
+class MultiConv(Model):
+    def __init__(self, channels, n_layers):
+        super(MultiConv, self).__init__()
+        self.conv = [Conv2D(channels, 3, padding='same', activation=LeakyReLU()) for i in range(n_layers)]
 
     def call(self, x):
         for c in self.conv:
