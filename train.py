@@ -22,7 +22,7 @@ lr=1e-3
 model = DiffusionModel()
 
 def _preprocess(sample):
-    image = tf.cast(sample['image'], tf.float32) / 255. -0.5# Scale to unit interval.
+    image = (tf.cast(sample['image'], tf.float32) -127.5) / 127.5
     return image
 
 
@@ -39,10 +39,9 @@ eval_dataset = (datasets['test']
                 .batch(batch_size)
                 .prefetch(tf.data.experimental.AUTOTUNE))
 
-
-model.train(train_dataset,epochs=1000)
-model.save()
-model.load()
-#model.generate_samples()
+#model.train(train_dataset,epochs=1000)
+#model.save('weights/try2')
+model.load('weights/try3')
+model.generate_samples()
 
 

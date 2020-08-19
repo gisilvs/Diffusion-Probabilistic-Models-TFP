@@ -14,8 +14,8 @@ logit = lambda u: tf.math.log(u / (1.-u))
 
 class DiffusionModel():
     def __init__(self, spatial_width=28,
-                 trajectory_length=10,
-                 n_temporal_basis=1000,
+                 trajectory_length=1000,
+                 n_temporal_basis=10,
                  n_hidden_dense_lower=500,
                  n_hidden_dense_lower_output=2,
                  n_hidden_dense_upper=20,
@@ -43,7 +43,16 @@ class DiffusionModel():
         self.temporal_basis = self.generate_temporal_basis(trajectory_length, n_temporal_basis)
         self.beta_arr = self.generate_beta_arr(step1_beta)
 
-        self.optimizer = tf.optimizers.Adam(learning_rate=1e-3)
+        starter_learning_rate = 1e-3
+        end_learning_rate = 1e-5
+        decay_steps = 120000
+        learning_rate_fn = tf.keras.optimizers.schedules.PolynomialDecay(
+            starter_learning_rate,
+            decay_steps,
+            end_learning_rate,
+            power=0.9)
+
+        self.optimizer = tf.optimizers.Adam(learning_rate=learning_rate_fn)
         self.train_loss = tf.keras.metrics.Mean(name='train_loss')
         self.seed = tfp.util.SeedStream(123, salt="random_beta")
 
@@ -277,6 +286,7 @@ class DiffusionModel():
                 X_noisy, t, mu_posterior, sigma_posterior = \
                     self.generate_forward_diffusion_sample(images)
                 self.train_step(X_noisy, t, mu_posterior, sigma_posterior)
+            print(epoch)
             print(self.train_loss.result())
 
 
@@ -300,8 +310,8 @@ class DiffusionModel():
         self.model.load_weights(path)
 
     def generate_samples(self,
-                         n_samples=36,
-                         num_intermediate_plots=4):
+                         n_samples=49,
+                         num_intermediate_plots=8):
         """
         Run the reverse diffusion process (generative model).
         """
@@ -314,17 +324,35 @@ class DiffusionModel():
         # set the initial state X^T of the reverse trajectory
         Xmid = tfd.Normal(loc=0,scale=1).sample((n_samples,spatial_width,spatial_width,n_colors),seed=self.seed())
 
+        fig = plt.figure(figsize=(7, 7))
+        for i in range(Xmid.shape[0]):
+            plt.subplot(7, 7, i + 1)
+            plt.imshow(Xmid[i, :, :, 0], cmap='gray')
+            plt.axis('off')
+        plt.savefig('plots/image_1000.png')
+        plt.close()
 
         for t in range(self.trajectory_length - 1, 0, -1):
             Xmid = self.diffusion_step(Xmid, t)
             if np.mod(self.trajectory_length - t,
                       int(np.ceil(self.trajectory_length / (num_intermediate_plots + 2.)))) == 0:
-                plt.imshow(Xmid[0].numpy().squeeze(), cmap='gray')
-                plt.show()
+                fig = plt.figure(figsize=(7, 7))
+                for i in range(Xmid.shape[0]):
+                    plt.subplot(7, 7, i + 1)
+                    plt.imshow(Xmid[i, :, :, 0], cmap='gray')
+                    plt.axis('off')
+                plt.savefig(f'plots/image_{t}.png')
+                plt.close()
 
         X0 = Xmid
-        plt.imshow(X0[0].numpy().squeeze(),cmap='gray')
-        plt.show()
+
+        fig = plt.figure(figsize=(7, 7))
+        for i in range(X0.shape[0]):
+            plt.subplot(7, 7, i + 1)
+            plt.imshow(X0[i, :, :, 0], cmap='gray')
+            plt.axis('off')
+        plt.savefig('plots/image_0.png')
+        plt.close()
 
     def diffusion_step(self, Xmid, t):
         """
